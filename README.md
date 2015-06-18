@@ -38,7 +38,7 @@ vctl cors upsert -f someFrontend -corsFile=yourYaml.yml
 * Clean it up as my Go goes
 
 ## Contributing
-1) Write tests
-2) Write code
-3) Run tests until they pass
-4) Issue PR
+1. Write tests
+2. Write code
+3. Run tests until they pass
+4. Issue PR
