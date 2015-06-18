@@ -6,12 +6,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/mailgun/oxy/utils"
 	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -51,60 +50,38 @@ type CorsHandler struct {
 // This function will be called each time the request hits the location with this middleware activated
 func (a *CorsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get(Origin)
-	hostIncluded := false
-	var methods []string
-	if a.cfg.AllowedOrigins[origin] != nil {
-		hostIncluded = true
-		methods = a.cfg.AllowedOrigins[origin]
-	}
-	if a.cfg.AllowedOrigins["*"] != nil {
-		hostIncluded = true
-		methods = a.cfg.AllowedOrigins["*"]
-	}
+
+	hostIncluded, methods := getHostAndMethods(a.cfg.AllowedOrigins, origin)
 	if !hostIncluded {
-		fmt.Println("Cors Error")
-		bw := &bufferWriter{header: make(http.Header), buffer: &bytes.Buffer{}}
-		newBody := bytes.NewBufferString("")
-		// We stop here, right?
-		//a.next.ServeHTTP(bw, r)
-		if err := ApplyString("{\"error\": \"forbidden\"}", newBody, r); err != nil {
-			fmt.Errorf("Can't write body")
-			return
-		}
-		w.Header().Set("Content-Length", strconv.Itoa(newBody.Len()))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		utils.CopyHeaders(w.Header(), bw.Header())
-		io.Copy(w, newBody)
+		requestDenied(w, r, "Request Blocked by CORS: Bad Host")
 		return
 	}
 
 	methodOK := false
-
 	if r.Method == "OPTIONS" {
 		// Preflight
+		w.Header().Set(AccessControlAllowOrigin, origin)
+		w.Header().Set(AccessControlAllowMethods, strings.Join(methods, ","))
 		if method := r.Header.Get(AccessControlRequestMethod); method != "" {
-			for _, a := range methods {
-				if a == method || a == "*" {
-					methodOK = true
-				}
-			}
+			methodOK = checkMethod(method, methods)
 		} else {
 			// We don't know what they hell they're doing, but
 			// the header will tell them
 			methodOK = true
 		}
-		w.Header().Set(AccessControlAllowOrigin, origin)
-		w.Header().Set(AccessControlAllowMethods, strings.Join(methods, ","))
 		if !methodOK {
-			w.WriteHeader(http.StatusForbidden)
-
-		} else {
-			w.WriteHeader(http.StatusOK)
+			requestDenied(w, r, "Request Blocked by CORS: Bad Method")
+			return
 		}
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	if !checkMethod(r.Method, methods) {
+		requestDenied(w, r, "Request Blocked by CORS: Bad Method")
+		return
+
+	}
 	// Pass the request to the next middleware in chain
 	a.next.ServeHTTP(w, r)
 }
@@ -207,6 +184,31 @@ func validateOrigins(origins map[string][]string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func requestDenied(w http.ResponseWriter, r *http.Request, message string) {
+	log.Println(message)
+	w.WriteHeader(http.StatusForbidden)
+	return
+}
+
+func getHostAndMethods(allowedOrigins map[string][]string, origin string) (bool, []string) {
+	if allowedOrigins[origin] != nil {
+		return true, allowedOrigins[origin]
+	}
+	if allowedOrigins["*"] != nil {
+		return true, allowedOrigins["*"]
+	}
+	return false, []string{}
+}
+
+func checkMethod(method string, methods []string) bool {
+	for _, a := range methods {
+		if a == method || a == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 // data represents template data that is available to use in templates.

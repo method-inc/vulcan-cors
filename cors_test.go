@@ -254,3 +254,43 @@ func (s *CorsSuite) TestAllowSpecificGetMultipleRequestSuccess(c *C) {
 	c.Assert(string(body), Equals, "you got it")
 	c.Assert(re.StatusCode, Equals, http.StatusOK)
 }
+
+func (s *CorsSuite) TestAllowMethodFailure(c *C) {
+	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{
+		"http://www.balls.com": []string{"GET", "POST"},
+		"http://www.arse.com":  []string{"*"},
+	}}
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "you got it")
+	})
+	handler, err := cors.NewHandler(h)
+	c.Assert(err, IsNil)
+
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	re, _, err := testutils.MakeRequest(srv.URL, testutils.Method("PUT"), testutils.Header("Origin", "http://www.balls.com"))
+	c.Assert(err, IsNil)
+	c.Assert(re.StatusCode, Equals, http.StatusForbidden)
+
+}
+
+func (s *CorsSuite) TestAllowMethodSuccess(c *C) {
+	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{
+		"http://www.balls.com": []string{"GET", "POST", "PUT"},
+		"http://www.arse.com":  []string{"*"},
+	}}
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "you got it")
+	})
+	handler, err := cors.NewHandler(h)
+	c.Assert(err, IsNil)
+
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	re, body, err := testutils.MakeRequest(srv.URL, testutils.Method("PUT"), testutils.Header("Origin", "http://www.balls.com"))
+	c.Assert(err, IsNil)
+	c.Assert(string(body), Equals, "you got it")
+	c.Assert(re.StatusCode, Equals, http.StatusOK)
+}
