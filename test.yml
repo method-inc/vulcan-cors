@@ -1,0 +1,7 @@
+http://google.com:
+  - GET
+  - POST
+http://balls.com:
+  - "*"
+"*":
+  - GET
