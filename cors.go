@@ -3,27 +3,20 @@ package cors
 // Note that I import the versions bundled with vulcand. That will make our lives easier, as we'll use exactly the same versions used
 // by vulcand. We are escaping dependency management troubles thanks to Godep.
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"gopkg.in/yaml.v2"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
-	"text/template"
 
 	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/codegangsta/cli"
 	"github.com/mailgun/vulcand/plugin"
 )
 
 const (
-	Type                       = "cors"
-	AccessControlAllowOrigin   = "Access-Control-Allow-Origin"
-	AccessControlAllowMethods  = "Access-Control-Allow-Methods"
-	AccessControlRequestMethod = "Access-Control-Request-Method"
-	Origin                     = "Origin"
+	Type = "cors"
 )
 
 func GetSpec() *plugin.MiddlewareSpec {
@@ -140,42 +133,6 @@ func CliFlags() []cli.Flag {
 	}
 }
 
-func ApplyString(in string, out io.Writer, request *http.Request) error {
-	t, err := template.New("t").Parse(in)
-	if err != nil {
-		return err
-	}
-
-	if err = t.Execute(out, data{request}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type bufferWriter struct {
-	header http.Header
-	code   int
-	buffer *bytes.Buffer
-}
-
-func (b *bufferWriter) Close() error {
-	return nil
-}
-
-func (b *bufferWriter) Header() http.Header {
-	return b.header
-}
-
-func (b *bufferWriter) Write(buf []byte) (int, error) {
-	return b.buffer.Write(buf)
-}
-
-// WriteHeader sets rw.Code.
-func (b *bufferWriter) WriteHeader(code int) {
-	b.code = code
-}
-
 func validateOrigins(origins map[string][]string) (bool, error) {
 	if len(origins) == 0 {
 		return false, errors.New("Must supply at least one origin or '*'")
@@ -212,9 +169,4 @@ func checkMethod(method string, methods []string) bool {
 		}
 	}
 	return false
-}
-
-// data represents template data that is available to use in templates.
-type data struct {
-	Request *http.Request
 }
