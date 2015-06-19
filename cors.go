@@ -53,11 +53,14 @@ func (a *CorsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	hostIncluded, methods := getHostAndMethods(a.cfg.AllowedOrigins, origin)
 	if !hostIncluded {
+		w.Header().Set(AccessControlAllowOrigin, "null")
 		requestDenied(w, r, "Request Blocked by CORS: Bad Host")
 		return
 	}
 
 	methodOK := false
+	w.Header().Set(AccessControlAllowOrigin, origin)
+
 	if r.Method == "OPTIONS" {
 		// Preflight
 		w.Header().Set(AccessControlAllowOrigin, origin)

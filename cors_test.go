@@ -195,6 +195,7 @@ func (s *CorsSuite) TestAllowSpecificMethodRequestFailure(c *C) {
 
 	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.arse.com"), testutils.Method("OPTIONS"))
 	c.Assert(err, IsNil)
+	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "null")
 	c.Assert(re.StatusCode, Equals, http.StatusForbidden)
 }
 
@@ -213,6 +214,7 @@ func (s *CorsSuite) TestAllowSpecificGetRequestSuccess(c *C) {
 	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"))
 	c.Assert(err, IsNil)
 	c.Assert(string(body), Equals, "you got it")
+	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
 	c.Assert(re.StatusCode, Equals, http.StatusOK)
 }
 
@@ -231,6 +233,7 @@ func (s *CorsSuite) TestAllowAllGetRequestSuccess(c *C) {
 	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header("Origin", "http://www.balls.com"))
 	c.Assert(err, IsNil)
 	c.Assert(string(body), Equals, "you got it")
+	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
 	c.Assert(re.StatusCode, Equals, http.StatusOK)
 }
 
@@ -252,6 +255,7 @@ func (s *CorsSuite) TestAllowSpecificGetMultipleRequestSuccess(c *C) {
 	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header("Origin", "http://www.balls.com"))
 	c.Assert(err, IsNil)
 	c.Assert(string(body), Equals, "you got it")
+	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
 	c.Assert(re.StatusCode, Equals, http.StatusOK)
 }
 
