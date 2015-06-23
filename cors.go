@@ -1,3 +1,7 @@
+// Package cors  implements a CORS middleware option for Vulcan proxy. See the Github repository for current functionality
+//
+// Once added to your vctl binary,  you can `vctl cors` for
+// it's usage.
 package cors
 
 // Note that I import the versions bundled with vulcand. That will make our lives easier, as we'll use exactly the same versions used
@@ -16,9 +20,11 @@ import (
 )
 
 const (
+	// Type of Vulcand middleware
 	Type = "cors"
 )
 
+// GetSpec is part of the Vulcan middleware interface
 func GetSpec() *plugin.MiddlewareSpec {
 	return &plugin.MiddlewareSpec{
 		Type:      Type,       // A short name for the middleware
@@ -28,19 +34,19 @@ func GetSpec() *plugin.MiddlewareSpec {
 	}
 }
 
-// CorshMiiddleware struct holds configuration parameters and is used to
+// CorsMiddleware struct holds configuration parameters and is used to
 // serialize/deserialize the configuration from storage engines.
 type CorsMiddleware struct {
 	AllowedOrigins map[string][]string
 }
 
-// Auth middleware handler
+// CorsHandler handler for the middleware
 type CorsHandler struct {
 	cfg  CorsMiddleware
 	next http.Handler
 }
 
-// This function will be called each time the request hits the location with this middleware activated
+// ServerHTTP will be called each time the request hits the location with this middleware activated
 func (a *CorsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get(Origin)
 
@@ -82,7 +88,7 @@ func (a *CorsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.next.ServeHTTP(w, r)
 }
 
-// This function is optional but handy, used to check input parameters when creating new middlewares
+// New is optional but handy, used to check input parameters when creating new middlewares
 func New(allowedOrigins map[string][]string) (*CorsMiddleware, error) {
 	_, err := validateOrigins(allowedOrigins)
 	if err != nil {
@@ -92,7 +98,7 @@ func New(allowedOrigins map[string][]string) (*CorsMiddleware, error) {
 	return &CorsMiddleware{allowedOrigins}, nil
 }
 
-// This function is important, it's called by vulcand to create a new handler from the middleware config and put it into the
+// NewHandler is important, it's called by vulcand to create a new handler from the middleware config and put it into the
 // middleware chain. Note that we need to remember 'next' handler to call
 func (c *CorsMiddleware) NewHandler(next http.Handler) (http.Handler, error) {
 	return &CorsHandler{next: next, cfg: *c}, nil
@@ -135,11 +141,11 @@ func CliFlags() []cli.Flag {
 
 func validateOrigins(origins map[string][]string) (bool, error) {
 	if len(origins) == 0 {
-		return false, errors.New("Must supply at least one origin or '*'")
+		return false, errors.New("must supply at least one origin or '*'")
 	}
-	for origin, _ := range origins {
+	for origin := range origins {
 		if origin == "" {
-			return false, errors.New("Must supply at least one origin or '*'")
+			return false, errors.New("must supply at least one origin or '*'")
 		}
 	}
 

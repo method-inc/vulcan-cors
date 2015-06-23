@@ -17,6 +17,8 @@ func (b *bufferWriter) WriteHeader(code int) {
 	b.code = code
 }
 
+// ApplyString creates template from `in` and applies the
+// `request` to it, writing the result to `out`
 func ApplyString(in string, out io.Writer, request *http.Request) error {
 	t, err := template.New("t").Parse(in)
 	if err != nil {

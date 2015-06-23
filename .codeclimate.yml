@@ -1,0 +1,7 @@
+---
+engines:
+  golint:
+    enabled: true
+  govet:
+    enabled: true
+exclude_paths: [ "cors_test.go"]
