@@ -64,6 +64,11 @@ func (a *CorsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Preflight
 		w.Header().Set(AccessControlAllowOrigin, origin)
 		w.Header().Set(AccessControlAllowMethods, strings.Join(methods, ","))
+
+		// Allow Authorization Header
+		// This is temporary (needs to be refactored)
+		w.Header().Set(AccessControlAllowHeaders, "Authorization")
+
 		if method := r.Header.Get(AccessControlRequestMethod); method != "" {
 			methodOK = checkMethod(method, methods)
 		} else {
