@@ -1,300 +1,427 @@
 package cors
 
 import (
-	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/codegangsta/cli"
-	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/mailgun/oxy/testutils"
-	. "github.com/mailgun/vulcand/Godeps/_workspace/src/gopkg.in/check.v1"
-	"github.com/mailgun/vulcand/plugin"
-	"io"
+	"testing"
+
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"testing"
+
+	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/codegangsta/cli"
+	"github.com/mailgun/vulcand/plugin"
 )
 
-func TestCL(t *testing.T) { TestingT(t) }
+// Helper method to read the test configuration file.
+func readConfigFile() (map[string]*host, error) {
+	configFile, err := ioutil.ReadFile("test.yml")
+	if err != nil {
+		return nil, err
+	}
 
-type CorsSuite struct {
+	var config map[string]*host
+	yaml.Unmarshal(configFile, &config)
+
+	return config, nil
 }
 
-var _ = Suite(&CorsSuite{})
+func setupTestServer(key string) *httptest.Server {
+	data, _ := readConfigFile()
+	config := map[string]*host{key: data[key]}
+	cors, _ := New(config)
 
-// One of the most important tests:
-// Make sure the JWT spec is compatible and will be accepted by middleware registry
-func (s *CorsSuite) TestSpecIsOK(c *C) {
-	c.Assert(plugin.NewRegistry().AddSpec(GetSpec()), IsNil)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	handler, _ := cors.NewHandler(next)
+
+	return httptest.NewServer(handler)
 }
 
-func (s *CorsSuite) TestNew(c *C) {
-	cl, err := New(map[string][]string{
-		"google.com": []string{"*"},
-	})
-	c.Assert(cl, NotNil)
-	c.Assert(err, IsNil)
+func setupTestRequest(method string, url string, origin string) *http.Request {
+	req, _ := http.NewRequest(method, url, nil)
+	req.Header.Add("Origin", origin)
 
-	c.Assert(cl.String(), Not(Equals), "")
-
-	out, err := cl.NewHandler(nil)
-	c.Assert(out, NotNil)
-	c.Assert(err, IsNil)
+	return req
 }
 
-func (s *CorsSuite) TestNewSpecifiMethods(c *C) {
-	cl, err := New(map[string][]string{
-		"google.com": []string{"GET", "POST"},
-	})
-	c.Assert(cl, NotNil)
-	c.Assert(err, IsNil)
+func TestSpecIsOK(t *testing.T) {
+	t.Log("Add CORS Middleware spec to Vulcan registry")
 
-	c.Assert(cl.String(), Not(Equals), "")
-
-	out, err := cl.NewHandler(nil)
-	c.Assert(out, NotNil)
-	c.Assert(err, IsNil)
-	c.Assert(len(cl.AllowedOrigins["google.com"]), Equals, 2)
+	err := plugin.NewRegistry().AddSpec(GetSpec())
+	if err != nil {
+		t.Errorf("Expected to be able to add spec but got error %+v", err)
+	}
 }
 
-func (s *CorsSuite) TestNewBadParams(c *C) {
-	// Empty pass
-	_, err := New(map[string][]string{})
-	c.Assert(err, NotNil)
+func TestNew(t *testing.T) {
+	t.Log("Creating CORS Middleware with New method")
+
+	config, err := readConfigFile()
+	if err != nil {
+		t.Errorf("Received error while processing config file: %+v", err)
+	}
+
+	cm, err := New(config)
+	if err != nil {
+		t.Errorf("Expected to create middleware but got error: %+v", err)
+	}
+
+	if cm == nil {
+		t.Errorf("Expected a CORS Middleware instance but got %+v", cm)
+	}
+
+	if cm.String() == "" {
+		t.Errorf("Expected middleware string %+v but got empty string", cm)
+	}
+
+	handler, err := cm.NewHandler(nil)
+	if err != nil {
+		t.Errorf("Expected to received a handler but got error: %+v", err)
+	}
+
+	if handler == nil {
+		t.Errorf("Expected a CORS Handler instance but got %+v", handler)
+	}
 }
 
-func (s *CorsSuite) TestFromOther(c *C) {
-	cl, err := New(map[string][]string{
-		"google.com": []string{"*"},
-	})
-	c.Assert(cl, NotNil)
-	c.Assert(err, IsNil)
+func TestNewInvalid(t *testing.T) {
+	t.Log("Creating CORS Middleware with invalid data")
 
-	out, err := FromOther(*cl)
-	c.Assert(err, IsNil)
-	c.Assert(out, DeepEquals, cl)
+	_, err := New(map[string]*host{})
+	if err == nil {
+		t.Errorf("Expected to receive an error but got %+v", err)
+	}
 }
 
-func (s *CorsSuite) TestCorsFromCli(c *C) {
+func TestFromOther(t *testing.T) {
+	t.Log("Creating CORS Middleware from other CORS Middleware")
+
+	config, err := readConfigFile()
+	if err != nil {
+		t.Errorf("Received error while processing config file: %+v", err)
+	}
+
+	cm, err := New(config)
+	if err != nil {
+		t.Errorf("Expected to create middleware but got error: %+v", err)
+	}
+
+	if cm == nil {
+		t.Errorf("Expected a CORS Middleware instance but got %+v", cm)
+	}
+
+	other, err := FromOther(*cm)
+	if err != nil {
+		t.Errorf("Expected to create other middleware but got error: %+v", err)
+	}
+
+	if other == nil {
+		t.Errorf("Expected other middleware to equal %+v but got nil", cm)
+	}
+}
+
+func TestFromCli(t *testing.T) {
+	t.Log("Create CORS Middleware from command line")
+
 	app := cli.NewApp()
-	app.Name = "test"
+	app.Name = "CORS Middleware Test"
 	executed := false
 	app.Action = func(ctx *cli.Context) {
 		executed = true
-		out, err := FromCli(ctx)
-		c.Assert(out, NotNil)
-		c.Assert(err, IsNil)
+		cm, err := FromCli(ctx)
+		if err != nil {
+			t.Errorf("Expected to create middleware but got error: %+v", err)
+		}
 
-		a := out.(*CorsMiddleware)
-		c.Assert(len(a.AllowedOrigins), Equals, 3)
+		if cm == nil {
+			t.Errorf("Expected CORS Middleware instance but got %+v", cm)
+		}
+
+		originCount := len((cm.(*Middleware)).allowedOrigins)
+		if originCount != 4 {
+			t.Errorf("Expected 4 origins but got %v", originCount)
+		}
 	}
+
 	app.Flags = CliFlags()
-	app.Run([]string{"test", "--corsFile=test.yml"})
-	c.Assert(executed, Equals, true)
+	app.Run([]string{"CORS Middleware Test", "--corsFile=test.yml"})
+	if !executed {
+		t.Errorf("Expected CLI app to run but it did not.")
+	}
 }
 
-func (s *CorsSuite) TestAllowAllOptionsRequestSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"*": []string{"*"}}}
+func TestAllowAllOrigins(t *testing.T) {
+	t.Log("Allow all origins when '*' is provided.")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	req := setupTestRequest("GET", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificOptionsRequestSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{"*"}}}
+func TestAllowSpecificOrigin(t *testing.T) {
+	t.Log("Allow specific origins when '*' is not provided")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer(origin)
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	req := setupTestRequest("GET", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.Header.Get(AccessControlAllowMethods), Equals, "*")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
 }
 
-func (s *CorsSuite) TestAllowAllMethodSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{"*"}}}
+func TestDenySpecificOrigin(t *testing.T) {
+	t.Log("Deny specific origin when not configured for access")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://notallowed.com"
+	server := setupTestServer("http://skookum.com")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	req := setupTestRequest("GET", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"), testutils.Header(AccessControlRequestMethod, "GET"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.Header.Get(AccessControlAllowMethods), Equals, "*")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusForbidden {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusForbidden, code)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificMethodSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{"GET", "POST"}}}
+func TestAllowAllMethods(t *testing.T) {
+	t.Log("Allow all methods when '*' is provided")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://allmethods.com"
+	server := setupTestServer(origin)
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	method := "PUT"
+	req := setupTestRequest(method, server.URL, origin)
+	req.Header.Add("Access-Control-Request-Method", method)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"), testutils.Header(AccessControlRequestMethod, "POST"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.Header.Get(AccessControlAllowMethods), Equals, "GET,POST")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+
+	resMethod := res.Header.Get(allowMethodsHeader)
+	if resMethod != method {
+		t.Errorf("Expected method header %v but it was %v", method, resMethod)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificOptionsRequestFailure(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{"*"}}}
+func TestAllowSpecificMethod(t *testing.T) {
+	t.Log("Allow specific method when '*' is not provided.")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	method := "PATCH"
+	req := setupTestRequest(method, server.URL, origin)
+	req.Header.Add("Access-Control-Request-Method", method)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.arse.com"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.StatusCode, Equals, http.StatusForbidden)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+
+	resMethod := res.Header.Get(allowMethodsHeader)
+	if resMethod != method {
+		t.Errorf("Expected method header %v but it was %v", method, resMethod)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificMethodRequestFailure(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{""}}}
+func TestAllowOptionsMethod(t *testing.T) {
+	t.Log("Always allow OPTIONS method")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	method := "OPTIONS"
+	req := setupTestRequest(method, server.URL, origin)
+	req.Header.Add("Access-Control-Request-Method", method)
+	res, err := (&http.Client{}).Do(req)
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.arse.com"), testutils.Method("OPTIONS"))
-	c.Assert(err, IsNil)
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "null")
-	c.Assert(re.StatusCode, Equals, http.StatusForbidden)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+
+	resMethod := res.Header.Get(allowMethodsHeader)
+	if resMethod != method {
+		t.Errorf("Expected method header %v but it was %v", method, resMethod)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificGetRequestSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"http://www.balls.com": []string{"*"}}}
+func TestDenySpecificMethod(t *testing.T) {
+	t.Log("Deny specific method when not configured for access")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "you got it")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	method := "POST"
+	req := setupTestRequest(method, server.URL, origin)
+	req.Header.Add("Access-Control-Request-Method", method)
+	res, err := (&http.Client{}).Do(req)
 
-	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header(Origin, "http://www.balls.com"))
-	c.Assert(err, IsNil)
-	c.Assert(string(body), Equals, "you got it")
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusForbidden {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusForbidden, code)
+	}
 }
 
-func (s *CorsSuite) TestAllowAllGetRequestSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{"*": []string{"*"}}}
+func TestAllowAllHeaders(t *testing.T) {
+	t.Log("Allow all headers when '*' is provided")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "you got it")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://allheaders.com"
+	server := setupTestServer(origin)
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	header := "X-CUSTOM"
+	req := setupTestRequest("GET", server.URL, origin)
+	req.Header.Add(header, "custom header data")
+	req.Header.Add(requestHeadersHeader, header)
+	res, err := (&http.Client{}).Do(req)
 
-	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header("Origin", "http://www.balls.com"))
-	c.Assert(err, IsNil)
-	c.Assert(string(body), Equals, "you got it")
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+
+	resHeader := res.Header.Get(allowHeadersHeader)
+	if resHeader != header {
+		t.Errorf("Expected allowed headers %v but it was %v", header, resHeader)
+	}
 }
 
-func (s *CorsSuite) TestAllowSpecificGetMultipleRequestSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{
-		"http://www.balls.com": []string{"*"},
-		"http://www.arse.com":  []string{"*"},
-	}}
+func TestAllowSecificHeader(t *testing.T) {
+	t.Log("Allow specific header when '*' is not provided")
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "you got it")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	header := "X-SPECIFIC"
+	req := setupTestRequest("GET", server.URL, origin)
+	req.Header.Add(header, "custom header data")
+	req.Header.Add(requestHeadersHeader, header)
+	res, err := (&http.Client{}).Do(req)
 
-	re, body, err := testutils.MakeRequest(srv.URL, testutils.Header("Origin", "http://www.balls.com"))
-	c.Assert(err, IsNil)
-	c.Assert(string(body), Equals, "you got it")
-	c.Assert(re.Header.Get(AccessControlAllowOrigin), Equals, "http://www.balls.com")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+
+	resHeader := res.Header.Get(allowHeadersHeader)
+	if resHeader != header {
+		t.Errorf("Expected allowed headers %v but it was %v", header, resHeader)
+	}
 }
 
-func (s *CorsSuite) TestAllowMethodFailure(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{
-		"http://www.balls.com": []string{"GET", "POST"},
-		"http://www.arse.com":  []string{"*"},
-	}}
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "you got it")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
+func TestDenySpecificHeader(t *testing.T) {
+	t.Log("Deny specific header when not configured for access")
 
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
+	origin := "http://skookum.com"
+	server := setupTestServer("*")
+	defer server.Close()
 
-	re, _, err := testutils.MakeRequest(srv.URL, testutils.Method("PUT"), testutils.Header("Origin", "http://www.balls.com"))
-	c.Assert(err, IsNil)
-	c.Assert(re.StatusCode, Equals, http.StatusForbidden)
+	header := "X-VERY-CUSTOM"
+	req := setupTestRequest("GET", server.URL, origin)
+	req.Header.Add(header, "custom header data")
+	req.Header.Add(requestHeadersHeader, header)
+	res, err := (&http.Client{}).Do(req)
 
-}
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
 
-func (s *CorsSuite) TestAllowMethodSuccess(c *C) {
-	cors := &CorsMiddleware{AllowedOrigins: map[string][]string{
-		"http://www.balls.com": []string{"GET", "POST", "PUT"},
-		"http://www.arse.com":  []string{"*"},
-	}}
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "you got it")
-	})
-	handler, err := cors.NewHandler(h)
-	c.Assert(err, IsNil)
-
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	re, body, err := testutils.MakeRequest(srv.URL, testutils.Method("PUT"), testutils.Header("Origin", "http://www.balls.com"))
-	c.Assert(err, IsNil)
-	c.Assert(string(body), Equals, "you got it")
-	c.Assert(re.StatusCode, Equals, http.StatusOK)
+	code := res.StatusCode
+	if code != http.StatusForbidden {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusForbidden, code)
+	}
 }

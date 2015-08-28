@@ -1,7 +1,26 @@
-http://google.com:
-  - GET
-  - POST
-http://balls.com:
-  - "*"
 "*":
-  - GET
+  methods:
+    - GET
+    - PATCH
+  headers:
+    - Origin
+    - Accept
+    - Content-Type
+    - X-SPECIFIC
+http://allmethods.com:
+  methods:
+    - "*"
+  headers:
+    - Origin
+    - Accept
+    - Content-Type
+http://allheaders.com:
+  methods:
+    - GET
+  headers:
+    - "*"
+http://skookum.com:
+  methods:
+    - "*"
+  headers:
+    - "*"
