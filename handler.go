@@ -55,8 +55,8 @@ func (h *Handler) handleCommon(w http.ResponseWriter, r *http.Request, method st
 		return
 	}
 
-	headers := strings.Split(r.Header.Get(requestHeadersHeader), ",")
-	if !h.cfg.areHeadersAllowed(headers, origin) {
+	headers := r.Header.Get(requestHeadersHeader)
+	if !h.cfg.areHeadersAllowed(strings.Split(headers, ","), origin) {
 		h.requestDenied(w, errorBadHeader)
 		return
 	}
@@ -77,8 +77,8 @@ func (h *Handler) prepResponse(w http.ResponseWriter) {
 }
 
 // Writes the Access Control response headers
-func (h *Handler) buildResponse(w http.ResponseWriter, r *http.Request, origin string, method string, headers []string) {
+func (h *Handler) buildResponse(w http.ResponseWriter, r *http.Request, origin string, method string, headers string) {
 	w.Header().Set(allowOriginHeader, origin)
 	w.Header().Set(allowMethodsHeader, method)
-	w.Header().Set(allowHeadersHeader, strings.Join(headers, ","))
+	w.Header().Set(allowHeadersHeader, headers)
 }
