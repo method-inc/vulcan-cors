@@ -40,7 +40,7 @@ func New(allowedOrigins map[string]*host) (*Middleware, error) {
 // The first and the only parameter should be the struct itself, no pointers and other variables.
 // Function should return middleware interface and error in case if the parameters are wrong.
 func FromOther(m Middleware) (plugin.Middleware, error) {
-	return New(m.allowedOrigins)
+	return New(m.AllowedOrigins)
 }
 
 // FromCli constructs the middleware from the command line.

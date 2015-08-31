@@ -14,7 +14,7 @@ type host struct {
 
 // Middleware struct holds configuration parameters.
 type Middleware struct {
-	allowedOrigins map[string]*host
+	AllowedOrigins map[string]*host
 }
 
 // NewHandler initializes a new handler from the middleware config and adds it to the middleware chain.
@@ -24,16 +24,16 @@ func (m *Middleware) NewHandler(next http.Handler) (http.Handler, error) {
 
 // String() will be called by loggers inside Vulcand and command line tool.
 func (m *Middleware) String() string {
-	return fmt.Sprintf("origins=%v", m.allowedOrigins)
+	return fmt.Sprintf("origins=%v", m.AllowedOrigins)
 }
 
 // Validates that the given origin is allowed.
 func (m *Middleware) isOriginAllowed(origin string) bool {
 	if origin == "" {
 		return false
-	} else if m.allowedOrigins[allToken] != nil {
+	} else if m.AllowedOrigins[allToken] != nil {
 		return true
-	} else if m.allowedOrigins[origin] != nil {
+	} else if m.AllowedOrigins[origin] != nil {
 		return true
 	}
 
@@ -91,9 +91,9 @@ func (m *Middleware) areHeadersAllowed(headers []string, origin string) bool {
 
 // Looks for the given origin or "*" if present.
 func (m *Middleware) findOrigin(origin string) *host {
-	allowedOrigin := m.allowedOrigins[origin]
+	allowedOrigin := m.AllowedOrigins[origin]
 	if allowedOrigin == nil {
-		allowedOrigin = m.allowedOrigins[allToken]
+		allowedOrigin = m.AllowedOrigins[allToken]
 	}
 
 	return allowedOrigin
