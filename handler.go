@@ -19,6 +19,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == optionsMethod {
 		h.handlePreflight(w, r)
+		w.WriteHeader(http.StatusOK)
+		return
 	} else {
 		h.handleRequest(w, r)
 	}
