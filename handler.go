@@ -48,18 +48,18 @@ func (h *Handler) handleRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCommon(w http.ResponseWriter, r *http.Request, method string) {
 	origin := r.Header.Get(originHeader)
 	if !h.cfg.isOriginAllowed(origin) {
-		h.requestDenied(w, errorBadOrigin)
+		h.requestDenied(w, r, errorBadOrigin)
 		return
 	}
 
 	if !h.cfg.isMethodAllowed(method, origin) {
-		h.requestDenied(w, errorBadMethod)
+		h.requestDenied(w, r, errorBadMethod)
 		return
 	}
 
 	headers := r.Header.Get(requestHeadersHeader)
 	if !h.cfg.areHeadersAllowed(strings.Split(headers, ","), origin) {
-		h.requestDenied(w, errorBadHeader)
+		h.requestDenied(w, r, errorBadHeader)
 		return
 	}
 
@@ -67,8 +67,19 @@ func (h *Handler) handleCommon(w http.ResponseWriter, r *http.Request, method st
 }
 
 // Sets the HTTP status to forbidden and logs error message
-func (h *Handler) requestDenied(w http.ResponseWriter, m string) {
-	log.Println(errorRoot, ": ", m)
+func (h *Handler) requestDenied(w http.ResponseWriter, r *http.Request, m string) {
+	log.Println(errorRoot, m)
+
+	log.Printf("ORIGIN: %v\n", r.Header.Get(originHeader))
+	log.Printf("METHOD: %v\n", r.Method)
+
+	headers := r.Header.Get(requestHeadersHeader)
+	log.Printf("HEADERS: %v\n\n", headers)
+	for _, h := range strings.Split(headers, ",") {
+		h = http.CanonicalHeaderKey(h)
+		log.Printf("%v: %v\n", h, r.Header.Get(h))
+	}
+
 	w.WriteHeader(http.StatusForbidden)
 	return
 }
