@@ -136,7 +136,7 @@ func TestFromCli(t *testing.T) {
 			t.Errorf("Expected CORS Middleware instance but got %+v", cm)
 		}
 
-		originCount := len((cm.(*Middleware)).allowedOrigins)
+		originCount := len((cm.(*Middleware)).AllowedOrigins)
 		if originCount != 4 {
 			t.Errorf("Expected 4 origins but got %v", originCount)
 		}
