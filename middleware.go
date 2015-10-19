@@ -2,6 +2,7 @@ package cors
 
 import (
 	"fmt"
+	"regexp"
 
 	"net/http"
 )
@@ -35,6 +36,29 @@ func (m *Middleware) isOriginAllowed(origin string) bool {
 		return true
 	} else if m.AllowedOrigins[origin] != nil {
 		return true
+	} else if m.originMatchesRegex(origin) {
+		return true
+	}
+
+	return false
+}
+
+func (m *Middleware) originMatchesRegex(origin string) bool {
+	re, err := regexp.Compile("^/(.+)/$")
+	if err != nil {
+		return false
+	}
+
+	for k := range m.AllowedOrigins {
+		if re.MatchString(k) {
+			url := fmt.Sprintf("^%s$", re.FindStringSubmatch(k)[1])
+			match, _ := regexp.MatchString(url, origin)
+
+			if match {
+				m.AllowedOrigins[origin] = m.AllowedOrigins[k]
+				return true
+			}
+		}
 	}
 
 	return false

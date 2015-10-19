@@ -137,8 +137,8 @@ func TestFromCli(t *testing.T) {
 		}
 
 		originCount := len((cm.(*Middleware)).AllowedOrigins)
-		if originCount != 4 {
-			t.Errorf("Expected 4 origins but got %v", originCount)
+		if originCount != 5 {
+			t.Errorf("Expected 5 origins but got %v", originCount)
 		}
 	}
 
@@ -199,11 +199,56 @@ func TestAllowSpecificOrigin(t *testing.T) {
 	}
 }
 
+func TestAllowRegexOrigin(t *testing.T) {
+	t.Log("Allow origins that match a given regex")
+
+	origin := "http://blog.skookum.com"
+	server := setupTestServer("/http://[a-z]+\\.skookum\\.com/")
+	defer server.Close()
+
+	req := setupTestRequest("GET", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
+
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resOrigin := res.Header.Get(allowOriginHeader)
+	if resOrigin != origin {
+		t.Errorf("Expected Origin header %v but it was %v", origin, resOrigin)
+	}
+}
+
 func TestDenySpecificOrigin(t *testing.T) {
 	t.Log("Deny specific origin when not configured for access")
 
 	origin := "http://notallowed.com"
 	server := setupTestServer("http://skookum.com")
+	defer server.Close()
+
+	req := setupTestRequest("GET", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
+
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusForbidden {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusForbidden, code)
+	}
+}
+
+func TestDenyRegexOrigin(t *testing.T) {
+	t.Log("Denies origins that don't match a given regex")
+
+	origin := "http://blog.skookum.org"
+	server := setupTestServer("/http://[a-z]+\\.skookum\\.com/")
 	defer server.Close()
 
 	req := setupTestRequest("GET", server.URL, origin)

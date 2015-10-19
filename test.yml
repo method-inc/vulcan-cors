@@ -24,3 +24,8 @@ http://skookum.com:
     - "*"
   headers:
     - "*"
+/http://[a-z]+\.skookum\.com/:
+  methods:
+    - "*"
+  headers:
+    - "*"
