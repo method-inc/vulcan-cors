@@ -49,7 +49,7 @@ func (m *Middleware) originMatchesRegex(origin string) bool {
 		return false
 	}
 
-	for k, _ := range m.AllowedOrigins {
+	for k := range m.AllowedOrigins {
 		if re.MatchString(k) {
 			url := fmt.Sprintf("^%s$", re.FindStringSubmatch(k)[1])
 			match, _ := regexp.MatchString(url, origin)
