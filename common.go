@@ -5,6 +5,7 @@ const (
 	allowOriginHeader  string = "Access-Control-Allow-Origin"
 	allowMethodsHeader string = "Access-Control-Allow-Methods"
 	allowHeadersHeader string = "Access-Control-Allow-Headers"
+	maxAgeHeader       string = "Access-Control-Max-Age"
 
 	// Request Headers
 	requestMethodHeader  string = "Access-Control-Request-Method"

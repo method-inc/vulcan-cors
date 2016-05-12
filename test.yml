@@ -24,6 +24,7 @@ http://skookum.com:
     - "*"
   headers:
     - "*"
+  max_age: 86500
 /http://[a-z]+\.skookum\.com/:
   methods:
     - "*"

@@ -17,14 +17,33 @@ This presumes you have built new `vulcand` and `vctl` binaries per [the instruct
 
 1. Create a YAML file of your allowed hosts and methods:
 ```
-http://google.com:
-  - GET
-  - POST
-http://balls.com:
-  - "*"
 "*":
-  - GET
-
+  methods:
+    - GET
+    - PATCH
+  headers:
+    - Origin
+    - Accept
+    - Content-Type
+    - X-SPECIFIC
+http://allmethods.com:
+  methods:
+    - "*"
+  headers:
+    - Origin
+    - Accept
+    - Content-Type
+http://allheaders.com:
+  methods:
+    - GET
+  headers:
+    - "*"
+http://skookum.com:
+  methods:
+    - "*"
+  headers:
+    - "*"
+  max_age: 86500
 ```
 (Notice that to allow anything use `"*"`. The quotes are necessary. Probably another caveat.)
 
@@ -40,6 +59,10 @@ vctl cors upsert -id=cors_middleware-f someFrontend -corsFile=yourYaml.yml --vul
 ```
 vctl cors rm -id-cors_middeware -f someFrontend --vulcan=http://yourvulcanhost
 ```
+
+### Notes
+
+The `Access-Control-Max-Age` header defaults to 86400.
 
 ## Roadmap
 * Support ALL THE CORS

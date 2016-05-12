@@ -11,6 +11,7 @@ import (
 type host struct {
 	Methods []string
 	Headers []string
+	MaxAge  int64 `yaml:"max_age"`
 }
 
 // Middleware struct holds configuration parameters.
@@ -62,6 +63,16 @@ func (m *Middleware) originMatchesRegex(origin string) bool {
 	}
 
 	return false
+}
+
+// Return max age value
+func (m *Middleware) maxAgeForOrigin(origin string) int64 {
+
+	hostCfg := m.AllowedOrigins[origin]
+	if hostCfg == nil || hostCfg.MaxAge == 0 {
+		return 86400
+	}
+	return hostCfg.MaxAge
 }
 
 // Validates that the given method is allowed.
