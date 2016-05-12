@@ -1,12 +1,11 @@
 package cors
 
 import (
-	"testing"
-
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 
 	"github.com/vulcand/vulcand/Godeps/_workspace/src/github.com/codegangsta/cli"
 	"github.com/vulcand/vulcand/plugin"
@@ -146,6 +145,56 @@ func TestFromCli(t *testing.T) {
 	app.Run([]string{"CORS Middleware Test", "--corsFile=test.yml"})
 	if !executed {
 		t.Errorf("Expected CLI app to run but it did not.")
+	}
+}
+
+func TestMaxAge(t *testing.T) {
+	t.Log("Max Age header.")
+
+	origin := "http://skookum.com"
+	server := setupTestServer(origin)
+	defer server.Close()
+
+	req := setupTestRequest("OPTIONS", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
+
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resMaxAge := res.Header.Get(maxAgeHeader)
+	if resMaxAge != "86500" {
+		t.Errorf("Expected Max Age header %v but it was %v", "86400", resMaxAge)
+	}
+}
+
+func TestDefaultMaxAge(t *testing.T) {
+	t.Log("Default Max Age header.")
+
+	origin := "http://allheaders.com"
+	server := setupTestServer(origin)
+	defer server.Close()
+
+	req := setupTestRequest("OPTIONS", server.URL, origin)
+	res, err := (&http.Client{}).Do(req)
+
+	if err != nil {
+		t.Errorf("Error while processing request: %+v", err)
+	}
+
+	code := res.StatusCode
+	if code != http.StatusOK {
+		t.Errorf("Expected HTTP status %v but it was %v", http.StatusOK, code)
+	}
+
+	resMaxAge := res.Header.Get(maxAgeHeader)
+	if resMaxAge != "86400" {
+		t.Errorf("Expected Max Age header %v but it was %v", "86400", resMaxAge)
 	}
 }
 

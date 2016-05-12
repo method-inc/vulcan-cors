@@ -2,9 +2,9 @@ package cors
 
 import (
 	"log"
-	"strings"
-
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // Handler executes CORS and handles the middleware chain to the next in stack
@@ -34,7 +34,15 @@ func (h *Handler) handlePreflight(w http.ResponseWriter, r *http.Request) {
 		method = r.Method
 	}
 
+	h.handleMaxAge(w, r)
+
 	h.handleCommon(w, r, method)
+}
+
+func (h *Handler) handleMaxAge(w http.ResponseWriter, r *http.Request) {
+	maxAge := strconv.Itoa(int(h.cfg.maxAgeForOrigin(r.Header.Get(originHeader))))
+
+	w.Header().Set(maxAgeHeader, maxAge)
 }
 
 // Runs the CORS specification for standard requests
